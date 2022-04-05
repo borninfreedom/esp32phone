@@ -3,12 +3,18 @@
 #include <lvgl.h>
 #include <TFT_eSPI.h>
 #include <lv_examples.h>
-
+#include "esp32-hal-cpu.h"
 // extern Adafruit_SH1106G display;
+#include <U8g2lib.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <string>
 
 TFT_eSPI tft = TFT_eSPI(); /* TFT instance */
 static lv_disp_buf_t disp_buf;
 static lv_color_t buf[LV_HOR_RES_MAX * 10];
+
+U8G2_SH1106_128X64_NONAME_2_SW_I2C u8g2(U8G2_R0, 22, 21);
 
 #if USE_LV_LOG != 0
 /* Serial debugging */
@@ -63,6 +69,10 @@ bool my_touchpad_read(lv_indev_drv_t *indev_driver, lv_indev_data_t *data)
   return false; /*Return `false` because we are not buffering and no more data to read*/
 }
 
+TaskHandle_t Task_Display;
+TaskHandle_t Task_OLED;
+
+char count = 0;
 void setup()
 {
   // put your setup code here, to run once:
@@ -71,7 +81,7 @@ void setup()
   // display.begin(i2c_Address,true);
   // testdrawbitmap(logo16_glcd_bmp, LOGO16_GLCD_HEIGHT, LOGO16_GLCD_WIDTH);
   Serial.begin(115200); /* prepare for possible serial debug */
-
+  setCpuFrequencyMhz(240);
   lv_init();
 
 #if USE_LV_LOG != 0
@@ -102,9 +112,46 @@ void setup()
   indev_drv.read_cb = my_touchpad_read;
   lv_indev_drv_register(&indev_drv);
 
-  // lv_demo_benchmark();
-  lv_demo_music();
-  // lv_example_get_started_1();
+  u8g2.begin();
+
+  lv_demo_benchmark();
+  // lv_demo_music();
+  //  lv_example_get_started_1();
+
+  xTaskCreatePinnedToCore(task_display, "Task_Display", 10000, NULL, 1, &Task_Display, 0);
+  delay(500);
+  // xTaskCreatePinnedToCore(task_oled, "Task_OLED", 10000, NULL, 1, &Task_OLED, 1);
+  // delay(500);
+}
+
+void task_display(void *pvParameters)
+{
+  for (;;)
+  {
+    lv_task_handler();
+    delay(5);
+  }
+}
+
+void task_oled(void *pvParameters)
+{
+  for (;;)
+  {
+    u8g2.firstPage();
+    do
+    {
+      u8g2.setFont(u8g2_font_ncenB14_tr);
+      std::string s = std::to_string(count);
+      const char *ss = s.c_str();
+      u8g2.drawStr(50, 24, ss);
+      count++;
+      if (count % 100 == 0)
+      {
+        count = 0;
+      }
+      delay(5);
+    } while (u8g2.nextPage());
+  }
 }
 
 void loop()
@@ -115,6 +162,24 @@ void loop()
   // delay(1000);
   // Serial.println(getCpuFrequencyMhz());
   // delay(1000);
-  lv_task_handler();
-  delay(5);
+  // lv_task_handler();
+  // delay(5);
+  // Serial.println(getCpuFrequencyMhz());
+  // Serial.println(xPortGetCoreID());
+
+  //在loop里面，oled屏幕的刷新速率略快
+  // u8g2.firstPage();
+  //   do
+  //   {
+  //     u8g2.setFont(u8g2_font_ncenB14_tr);
+  //     std::string s = std::to_string(count);
+  //     const char *ss = s.c_str();
+  //     u8g2.drawStr(50, 24, ss);
+  //     count++;
+  //     if (count % 100 == 0)
+  //     {
+  //       count = 0;
+  //     }
+  //     delay(5);
+  //   } while (u8g2.nextPage());
 }
